@@ -75,12 +75,14 @@ fn main() -> Result<()> {
 
 type Backend = CrosstermBackend<io::Stderr>;
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct Guess(Vec<usize>);
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq)]
 struct Hint {
+    /// correct color, correct position
     bulls: usize,
+    /// correct color, wrong position
     cows: usize,
 }
 
@@ -383,23 +385,79 @@ fn parse_color_number(c: char) -> Option<usize> {
 }
 
 fn calc_hint(guess: &Guess, solution: &Guess, num_colors: usize) -> Hint {
-    let mut color_counts = vec![0; num_colors];
-    for color in &solution.0 {
-        color_counts[*color] += 1;
-    }
-
     let mut bulls = 0;
-    let mut cows = 0;
-
+    let mut guess_counts = vec![0usize; num_colors];
+    let mut solution_counts = vec![0usize; num_colors];
     for (guess, solution) in guess.0.iter().zip(solution.0.iter()) {
         if guess == solution {
             bulls += 1;
-            color_counts[*guess] -= 1;
-        } else if color_counts[*guess] > 0 {
-            cows += 1;
-            color_counts[*guess] -= 1;
+        } else {
+            guess_counts[*guess] += 1;
+            solution_counts[*solution] += 1;
         }
     }
 
+    let cows = guess_counts
+        .iter()
+        .zip(solution_counts.iter())
+        .fold(0, |sum, (a, b)| sum + a.min(b));
+
     Hint { bulls, cows }
+}
+
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck_macros;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::TestResult;
+
+    #[allow(clippy::needless_range_loop)]
+    fn gnome_mastermind_checkscores(guess: &Guess, solution: &Guess) -> Hint {
+        let mut guess: Vec<_> = guess.0.iter().map(|x| *x as isize).collect();
+        let solution: Vec<_> = solution.0.iter().map(|x| *x as isize).collect();
+        let mut tmp = solution.clone();
+
+        let mut bulls = 0;
+        for i in 0..guess.len() {
+            if guess[i] == solution[i] {
+                bulls += 1;
+                tmp[i] = -1;
+                guess[i] = -2;
+            }
+        }
+
+        let mut cows = 0;
+        for i in 0..guess.len() {
+            for j in 0..guess.len() {
+                if guess[i] == tmp[j] {
+                    cows += 1;
+                    guess[i] = -2;
+                    tmp[j] = -1;
+                }
+            }
+        }
+
+        Hint { bulls, cows }
+    }
+
+    #[quickcheck]
+    fn hint(xs: Vec<(usize, usize)>) -> TestResult {
+        if xs.is_empty() {
+            return TestResult::discard();
+        }
+
+        let guess = Guess(xs.iter().map(|(a, _)| a).copied().collect());
+        let solution = Guess(xs.iter().map(|(_, b)| b).copied().collect());
+        let num_colors = guess.0.iter().chain(solution.0.iter()).max().unwrap() + 1;
+
+        assert_eq!(
+            calc_hint(&guess, &solution, num_colors),
+            gnome_mastermind_checkscores(&guess, &solution)
+        );
+
+        TestResult::passed()
+    }
 }
