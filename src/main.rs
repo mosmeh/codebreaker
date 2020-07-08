@@ -144,35 +144,22 @@ impl<'a> Game<'a> {
                     (_, KeyCode::Esc)
                     | (KeyModifiers::CONTROL, KeyCode::Char('c'))
                     | (_, KeyCode::Char('q')) => break,
-                    (_, KeyCode::Char(c)) if self.current_guess.0.len() < self.opt.holes.get() => {
-                        if let Some(number) = parse_color_number(c) {
-                            if number < self.opt.colors.get() {
-                                self.current_guess.0.push(number);
-                            }
-                        }
-                    }
                     (_, KeyCode::Backspace) | (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
-                        self.current_guess.0.pop();
+                        self.on_backspace()
                     }
-                    (_, KeyCode::Enter) | (_, KeyCode::Char(' '))
-                        if self.current_guess.0.len() == self.opt.holes.get() =>
-                    {
-                        let hint =
-                            calc_hint(&self.current_guess, &self.solution, self.opt.colors.get());
-                        self.guesses.push(std::mem::take(&mut self.current_guess));
-                        self.hints.push(hint);
-
-                        if self.status() != State::Playing {
-                            terminal.draw(|mut f| {
-                                self.draw(&mut f);
-                            })?;
-                            cleanup_terminal(&mut terminal)?;
-
-                            return Ok(());
-                        }
-                    }
+                    (_, KeyCode::Enter) | (_, KeyCode::Char(' ')) => self.on_enter(),
+                    (_, KeyCode::Char(c)) => self.on_char(c),
                     _ => (),
                 }
+            }
+
+            if self.status() != State::Playing {
+                terminal.draw(|mut f| {
+                    self.draw(&mut f);
+                })?;
+                cleanup_terminal(&mut terminal)?;
+
+                return Ok(());
             }
         }
 
@@ -192,6 +179,36 @@ impl<'a> Game<'a> {
         } else {
             State::Playing
         }
+    }
+
+    fn on_char(&mut self, c: char) {
+        if self.current_guess.0.len() >= self.opt.holes.get() {
+            return;
+        }
+
+        if let Some(number) = parse_color_number(c) {
+            if self.opt.no_duplicate && self.current_guess.0.iter().any(|x| *x == number) {
+                return;
+            }
+
+            if number < self.opt.colors.get() {
+                self.current_guess.0.push(number);
+            }
+        }
+    }
+
+    fn on_backspace(&mut self) {
+        self.current_guess.0.pop();
+    }
+
+    fn on_enter(&mut self) {
+        if self.current_guess.0.len() != self.opt.holes.get() {
+            return;
+        }
+
+        let hint = calc_hint(&self.current_guess, &self.solution, self.opt.colors.get());
+        self.guesses.push(std::mem::take(&mut self.current_guess));
+        self.hints.push(hint);
     }
 
     fn draw(&self, f: &mut Frame<Backend>) {
@@ -326,7 +343,7 @@ impl<'a> Game<'a> {
                 .take(hint.bulls);
             let cows =
                 iter::repeat(Text::styled(CIRCLE, Style::default().fg(COW_COLOR))).take(hint.cows);
-            let dots = std::iter::repeat(Text::raw(DOT));
+            let dots = iter::repeat(Text::raw(DOT));
 
             let text: Vec<_> = bulls
                 .chain(cows)
