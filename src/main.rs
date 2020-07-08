@@ -282,7 +282,11 @@ impl<'a> Game<'a> {
 
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(board_width as u16), Constraint::Min(1)])
+            .constraints([
+                Constraint::Length(2),
+                Constraint::Length(board_width as u16),
+                Constraint::Min(1),
+            ])
             .split(area);
 
         let empty_guess = Default::default();
@@ -301,7 +305,7 @@ impl<'a> Game<'a> {
             .take(self.opt.guesses.get());
 
         let constraints = vec![Constraint::Length(1); self.opt.guesses.get() + 1]; // +1 for solution
-        let rows = Layout::default().constraints(constraints).split(chunks[0]);
+        let rows = Layout::default().constraints(constraints).split(chunks[1]);
 
         let solution_row = rows[0];
         let solution = if self.status() == State::Playing {
@@ -316,27 +320,17 @@ impl<'a> Game<'a> {
             self.draw_row(f, guess, Some(hint), *row);
         }
 
-        self.draw_legend(f, chunks[1]);
+        self.draw_legend(f, chunks[2]);
     }
 
     fn draw_row(&self, f: &mut Frame<Backend>, guess: &Guess, hint: Option<&Hint>, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(2 * self.opt.holes.get() as u16 + 1),
+                Constraint::Length(self.opt.holes.get() as u16 + 2),
                 Constraint::Min(1),
             ])
             .split(area);
-
-        let text: Vec<_> = guess
-            .0
-            .iter()
-            .map(|c| Text::styled(CIRCLE, Style::default().fg(CODE_COLORS[*c])))
-            .chain(iter::repeat(Text::raw(DOT)))
-            .take(self.opt.holes.get())
-            .intersperse(Text::raw(" "))
-            .collect();
-        f.render_widget(Paragraph::new(text.iter()), chunks[0]);
 
         if let Some(hint) = hint {
             let bulls = iter::repeat(Text::styled(CIRCLE, Style::default().fg(BULL_COLOR)))
@@ -350,8 +344,18 @@ impl<'a> Game<'a> {
                 .chain(dots)
                 .take(self.opt.holes.get())
                 .collect();
-            f.render_widget(Paragraph::new(text.iter()), chunks[1]);
+            f.render_widget(Paragraph::new(text.iter()), chunks[0]);
         }
+
+        let text: Vec<_> = guess
+            .0
+            .iter()
+            .map(|c| Text::styled(CIRCLE, Style::default().fg(CODE_COLORS[*c])))
+            .chain(iter::repeat(Text::raw(DOT)))
+            .take(self.opt.holes.get())
+            .intersperse(Text::raw(" "))
+            .collect();
+        f.render_widget(Paragraph::new(text.iter()), chunks[1]);
     }
 
     fn draw_legend(&self, f: &mut Frame<Backend>, area: Rect) {
