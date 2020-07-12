@@ -106,7 +106,11 @@ impl<'a> Game<'a> {
         let mut rng = rand::thread_rng();
         let solution = if opt.no_duplicate {
             // sample without replacement
-            (0..opt.colors.get()).choose_multiple(&mut rng, opt.holes.get())
+            let mut colors = (0..opt.colors.get()).choose_multiple(&mut rng, opt.holes.get());
+
+            // choose_multiple doesn't shuffle, so we have to shuffle the result
+            colors.shuffle(&mut rng);
+            colors
         } else {
             use rand::distributions::Uniform;
 
