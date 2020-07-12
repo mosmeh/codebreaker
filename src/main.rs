@@ -3,7 +3,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 use itertools::{izip, Itertools};
 use rand::prelude::*;
-use std::io;
+use std::io::{self, Write};
 use std::iter;
 use std::num::NonZeroUsize;
 use structopt::StructOpt;
@@ -80,9 +80,9 @@ struct Guess(Vec<usize>);
 
 #[derive(Debug, Default, PartialEq)]
 struct Hint {
-    /// correct color, correct position
+    /// Correct color, correct position
     bulls: usize,
-    /// correct color, wrong position
+    /// Correct color, wrong position
     cows: usize,
 }
 
@@ -154,16 +154,33 @@ impl<'a> Game<'a> {
             }
 
             if self.status() != State::Playing {
-                terminal.draw(|mut f| {
-                    self.draw(&mut f);
-                })?;
-                cleanup_terminal(&mut terminal)?;
-
-                return Ok(());
+                break;
             }
         }
 
+        terminal.draw(|mut f| {
+            self.draw(&mut f);
+        })?;
+
+        let height =
+            // explanation of bulls & cows
+            2
+            // margin
+            + 1
+            // board
+            + self.opt.guesses.get() as u16 + 1
+            // margin
+            + 1
+            // messages
+            + 2
+            // margin
+            + 1;
+        let mut stdout = std::io::stdout();
+        crossterm::queue!(stdout, crossterm::cursor::MoveTo(0, height))?;
+        stdout.flush()?;
+
         cleanup_terminal(&mut terminal)?;
+
         Ok(())
     }
 
